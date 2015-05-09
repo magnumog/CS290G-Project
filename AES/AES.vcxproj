@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{C166E709-7D95-48FA-A708-E41523A6C081}</ProjectGuid>
+    <ProjectGuid>{3E70BA5B-C384-46B1-A4CA-AFBEF189C80F}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>AES</RootNamespace>
   </PropertyGroup>
