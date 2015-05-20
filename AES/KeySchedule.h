@@ -1,10 +1,14 @@
 #pragma once
 #include <vector>;
+#include <stdint.h>
 
 class KeySchedule
 {
+	int m_currentRoundNum = 0;
+	std::vector<uint8_t> m_currentRoundKey;
+
 public:
-	KeySchedule(std::vector<char> key);
+	KeySchedule(std::vector<uint8_t> key);
 	~KeySchedule();
-	std::vector<char> NextKey();
+	std::vector<uint8_t> GetNextKey();
 };
