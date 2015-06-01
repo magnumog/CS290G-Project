@@ -24,6 +24,13 @@ using namespace std;
 	mcTmp[i+3] = (uint8_t)(galois3[sboxTmp[j0]] ^ sboxTmp[j1] ^ sboxTmp[j2] ^ galois2[sboxTmp[j3]]);	\
 }
 
+#define MC_inv(i,j0,j1,j2,j3) {																										\
+	mc_InvTmp[i] = (uint8_t)(galois14[sboxTemp[j0]] ^ galois11[sboxTemp[j1]] ^ galois13[sboxTemp[j2]] ^ galois9[sboxTemp[j3]]);		\
+	mc_InvTmp[i+1] = (uint8_t)(galois9[sboxTemp[j0]] ^ galois14[sboxTemp[j1]] ^ galois11[sboxTemp[j2]] ^ galois13[sboxTemp[j3]]);	\
+	mc_InvTmp[i+2] = (uint8_t)(galois13[sboxTemp[j0]] ^ galois9[sboxTemp[j1]] ^ galois14[sboxTemp[j2]] ^ galois11[sboxTemp[j3]]);	\
+	mc_InvTmp[i+3] = (uint8_t)(galois11[sboxTemp[j0]] ^ galois13[sboxTemp[j1]] ^ galois9[sboxTemp[j2]] ^ galois14[sboxTemp[j3]]);	\
+}
+
 static vector<uint8_t> FileReadAllBytes(char const* filename)
 {
 	ifstream ifs(filename, ios::binary | ios::ate);
@@ -67,6 +74,29 @@ static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 	// 8e 4d a1 bc
 	return mcTmp;
 }
+
+static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
+	KeySchedule keySchedule(key);
+
+	auto sboxTemp = vector<uint8_t>(16);
+	for (auto i = 0; i < 16; i++)
+	{
+		sboxTemp[i] = sbox[message[i]];
+	}
+
+
+	//InverseMixColumns
+	auto mc_InvTmp = vector<uint8_t>(16);
+	MC_inv(0,0,4,8,12);
+	MC_inv(4,13,1,5,9);
+	MC_inv(8,10,14,2,6);
+	MC_inv(12,7,11,15,3)
+
+	return mc_InvTmp;
+
+}
+
+
 
 int _tmain(int argc, _TCHAR* argv[])
 {
