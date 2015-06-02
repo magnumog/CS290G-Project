@@ -188,21 +188,46 @@ static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 	KeySchedule keySchedule(key);
 
-	auto sboxTemp = vector<uint8_t>(16);
-	for (auto i = 0; i < 16; i++)
-	{
-		sboxTemp[i] = sbox[message[i]];
+	auto firstKey = keySchedule.GetNextKey;
+	auto temp = vector<uint8_t>(16);
+	for(auto i=0;i<16;i++) {
+		temp[i] = firstKey^data[i];
 	}
 
+	//1 to n-1 rounds
+	for(auto i=0;i<9;i++) {
+		auto sboxTemp = vector<uint8_t>(16);
+		for (auto i = 0; i < 16; i++) {
+			sboxTemp[i] = sbox[temp[i]];
+		}
+		//InverseMixColumns
+		auto mc_InvTmp = vector<uint8_t>(16);
+		MC_inv(0,0,4,8,12);
+		MC_inv(4,13,1,5,9);
+		MC_inv(8,10,14,2,6);
+		MC_inv(12,7,11,15,3)
 
-	//InverseMixColumns
-	auto mc_InvTmp = vector<uint8_t>(16);
-	MC_inv(0,0,4,8,12);
-	MC_inv(4,13,1,5,9);
-	MC_inv(8,10,14,2,6);
-	MC_inv(12,7,11,15,3)
+		auto newKey = keySchedule.GetNextKey();
+		for(auto i=0;i<16;i++) {
+			temp[i] = newKey[i]^mc_InvTmp[i];
+		}
+	}
+	auto output = vector<uint8_t>(16);
+	auto secondOutput = vector>uint8_t>(16);
 
-	return mc_InvTmp;
+	for(auto i=0;i<16;i++) {
+		result[i] = sbox[temp[i]]
+	}
+
+	//shiftRows
+
+
+
+	auto newKey = keySchedule.GetNextKey();
+	for(auto i=0;i<16;i++) {
+		temp[i] = newKey[i]^result2[i]
+	}
+	return temp;
 
 }
 
