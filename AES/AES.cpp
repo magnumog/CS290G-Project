@@ -194,26 +194,27 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 	auto temp = vector<uint8_t>(16);
 	auto temp2 = vector<uint8_t>(16);
 	for(auto i=0;i<16;i++) {
-		temp2[i] = firstKey^data[i];
+		temp2[i] = firstKey[i]^data[i];
 	}
 
-	SR(0,0)
-	SR(1,1)
-	SR(2,2)
-	SR(3,3)
-	SR(4,7)
-	SR(5,4)
-	SR(6,5)
-	SR(7,6)
-	SR(8,10)
-	SR(9,11)
-	SR(10,8)
-	SR(11,9)
-	SR(12,13)
-	SR(13,14)
-	SR(14,15)
-	SR(15,12)
+	ShiftRowInverse(0,0)
+	ShiftRowInverse(1,13)
+	ShiftRowInverse(2,10)
+	ShiftRowInverse(3,7)
+	ShiftRowInverse(4,4)
+	ShiftRowInverse(5,1)
+	ShiftRowInverse(6,14)
+	ShiftRowInverse(7,11)
+	ShiftRowInverse(8,8)
+	ShiftRowInverse(9,5)
+	ShiftRowInverse(10,2)
+	ShiftRowInverse(11,15)
+	ShiftRowInverse(12,12)
+	ShiftRowInverse(13,9)
+	ShiftRowInverse(14,6)
+	ShiftRowInverse(15,3)
 
+	
 	auto sboxTemp = vector<uint8_t>(16);
 	for (auto i = 0; i < 16; i++) {
 		sboxTemp[i] = rsbox[temp[i]];
