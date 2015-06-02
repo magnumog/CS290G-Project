@@ -187,10 +187,10 @@ static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 	return tmp;
 }
 
-static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
+static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> data) {
 	KeySchedule keySchedule(key);
 
-	auto firstKey = keySchedule.GetNextKey;
+	auto firstKey = keySchedule.GetNextKey();
 	auto temp = vector<uint8_t>(16);
 	auto temp2 = vector<uint8_t>(16);
 	for(auto i=0;i<16;i++) {
@@ -224,16 +224,16 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 	//2 to n rounds
 	for(auto i=0;i<9;i++) {
 		auto newKey = keySchedule.GetNextKey();
-		for(auto i=0;i<16;i++) {
-			temp[i] = newKey[i]^mc_InvTmp[i];
-		}
 
 		//InverseMixColumns
 		auto mc_InvTmp = vector<uint8_t>(16);
 		MC_inv(0,0,4,8,12);
 		MC_inv(4,13,1,5,9);
 		MC_inv(8,10,14,2,6);
-		MC_inv(12,7,11,15,3)
+		MC_inv(12, 7, 11, 15, 3);
+		for (auto i = 0; i<16; i++) {
+			temp[i] = newKey[i] ^ mc_InvTmp[i];
+		}
 
 		for (auto i = 0; i < 16; i++) {
 			sboxTemp[i] = rsbox[temp[i]];
@@ -243,7 +243,7 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 
 	auto newKey = keySchedule.GetNextKey();
 	for(auto i=0;i<16;i++) {
-		temp[i] = newKey[i]^temp[i]
+		temp[i] = newKey[i] ^ temp[i];
 	}
 	return temp;
 
@@ -273,6 +273,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	for (auto it = data.begin(); it != data.end(); it++)
 	{
 		auto res = Encrypt(key[0], *it);
+		//auto decryptRes = decrypt(key[0], *it);
 	}
 	
 	return 0;
