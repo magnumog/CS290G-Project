@@ -28,7 +28,7 @@ std::vector<uint8_t> KeySchedule::GetNextKey()
 	uint8_t* ptr = m_currentRoundKey.data();
 
 	// first 4 bytes with g applied
-	ptr[0] = ptr[0] ^ (sbox[ptr[13]] ^ Rcon[m_currentRoundNum]);
+	ptr[0] = ptr[0] ^ (sbox[ptr[13]] ^ Rcon[m_currentRoundNum+1]);
 	ptr[1] = ptr[1] ^ sbox[ptr[14]];
 	ptr[2] = ptr[2] ^ sbox[ptr[15]];
 	ptr[3] = ptr[3] ^ sbox[ptr[12]];
