@@ -21,6 +21,8 @@ using namespace std;
 
 #define SR(i, j) result2[i] = result[j];
 
+#define ShiftRowInverse(i,j) temp[i] = temp2[i];
+
 #define MC(i, j0, j1, j2, j3) {						            \
 	mcTmp[i] = (uint8_t)(galois2[sboxTmp[j0]] ^ galois3[sboxTmp[j1]] ^ sboxTmp[j2] ^ sboxTmp[j3]);	    \
 	mcTmp[i+1] = (uint8_t)(sboxTmp[j0] ^ galois2[sboxTmp[j1]] ^ galois3[sboxTmp[j2]] ^ sboxTmp[j3]);	\
@@ -190,16 +192,41 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 
 	auto firstKey = keySchedule.GetNextKey;
 	auto temp = vector<uint8_t>(16);
+	auto temp2 = vector<uint8_t>(16);
 	for(auto i=0;i<16;i++) {
-		temp[i] = firstKey^data[i];
+		temp2[i] = firstKey^data[i];
 	}
 
-	//1 to n-1 rounds
+	SR(0,0)
+	SR(1,1)
+	SR(2,2)
+	SR(3,3)
+	SR(4,7)
+	SR(5,4)
+	SR(6,5)
+	SR(7,6)
+	SR(8,10)
+	SR(9,11)
+	SR(10,8)
+	SR(11,9)
+	SR(12,13)
+	SR(13,14)
+	SR(14,15)
+	SR(15,12)
+
+	auto sboxTemp = vector<uint8_t>(16);
+	for (auto i = 0; i < 16; i++) {
+		sboxTemp[i] = rsbox[temp[i]];
+	}
+	//DO I NEED TO MULTIPLY THE SBOXTEMP WITH TEMP??
+
+	//2 to n rounds
 	for(auto i=0;i<9;i++) {
-		auto sboxTemp = vector<uint8_t>(16);
-		for (auto i = 0; i < 16; i++) {
-			sboxTemp[i] = sbox[temp[i]];
+		auto newKey = keySchedule.GetNextKey();
+		for(auto i=0;i<16;i++) {
+			temp[i] = newKey[i]^mc_InvTmp[i];
 		}
+
 		//InverseMixColumns
 		auto mc_InvTmp = vector<uint8_t>(16);
 		MC_inv(0,0,4,8,12);
@@ -207,25 +234,15 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> message) {
 		MC_inv(8,10,14,2,6);
 		MC_inv(12,7,11,15,3)
 
-		auto newKey = keySchedule.GetNextKey();
-		for(auto i=0;i<16;i++) {
-			temp[i] = newKey[i]^mc_InvTmp[i];
+		for (auto i = 0; i < 16; i++) {
+			sboxTemp[i] = rsbox[temp[i]];
 		}
+		//DO I NEED TO MULTIPLY THE SBOXTEMP WITH TEMP??
 	}
-	auto output = vector<uint8_t>(16);
-	auto secondOutput = vector>uint8_t>(16);
-
-	for(auto i=0;i<16;i++) {
-		result[i] = sbox[temp[i]]
-	}
-
-	//shiftRows
-
-
 
 	auto newKey = keySchedule.GetNextKey();
 	for(auto i=0;i<16;i++) {
-		temp[i] = newKey[i]^result2[i]
+		temp[i] = newKey[i]^temp[i]
 	}
 	return temp;
 
