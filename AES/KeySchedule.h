@@ -11,4 +11,5 @@ public:
 	KeySchedule(std::vector<uint8_t> key);
 	~KeySchedule();
 	std::vector<uint8_t> GetNextKey();
+	std::vector<std::vector<uint8_t>> CreateKeys(std::vector<uint8_t> key, int num);
 };

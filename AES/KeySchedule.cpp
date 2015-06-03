@@ -44,3 +44,31 @@ std::vector<uint8_t> KeySchedule::GetNextKey()
 	// Return current key
 	return retKey;
 }
+
+std::vector<std::vector<uint8_t>> KeySchedule::CreateKeys(std::vector<uint8_t> key, int num)
+{
+	auto result = std::vector<std::vector<uint8_t>>(num);
+	result[0] = key;
+
+	for (auto i = 1; i < num; i++)
+	{
+		auto roundKey = std::vector<uint8_t>(result[i-1]);
+		uint8_t* ptr = roundKey.data();
+
+		// first 4 bytes with g applied
+		ptr[0] = ptr[0] ^ (sbox[ptr[13]] ^ Rcon[i]);
+		ptr[1] = ptr[1] ^ sbox[ptr[14]];
+		ptr[2] = ptr[2] ^ sbox[ptr[15]];
+		ptr[3] = ptr[3] ^ sbox[ptr[12]];
+
+		// last 12 bytes
+		OP(ptr, 0);
+		OP(ptr, 4);
+		OP(ptr, 8);
+
+		result[i] = roundKey;
+	}
+
+	// Return current key
+	return result;
+}
