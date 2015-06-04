@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <algorithm>
 #include <iomanip>
-#include <tchar.h>
 using namespace std;
 
 // https://github.com/kokke/tiny-AES128-C/blob/master/aes.c
@@ -242,7 +241,7 @@ static vector<uint8_t> Decrypt(vector<uint8_t> key, vector<uint8_t> data) {
 
 
 
-int _tmain(int argc, _TCHAR* argv[])
+int main()
 {
 	auto keys = FileReadAllBytes("key.txt");
 	auto messages = FileReadAllBytes("messages.txt");
