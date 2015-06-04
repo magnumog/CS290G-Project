@@ -1,4 +1,3 @@
-#include "stdafx.h"
 #include "AES.h"
 #include "KeySchedule.h"
 #include "Rijndael.h"
@@ -11,6 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <algorithm>
+#include <iomanip>
+#include <tchar.h>
 using namespace std;
 
 // https://github.com/kokke/tiny-AES128-C/blob/master/aes.c
@@ -55,14 +56,14 @@ static vector<vector<uint8_t>> FileReadAllBytes(char const* filename)
 	std::string line;
 	while (std::getline(ifs, line))
 	{
-		if (line.length() != 16) continue;
+		if (line.length() != 32) continue;
 
 		vector<uint8_t> innerResult(16);
 
 		for (auto i = 0; i < 16; i++)
 		{
-			char c[2];
-			strncpy_s(c, &line[i], 1);
+			char c[3];
+			strncpy_s(c, &line[i*2], 2);
 			innerResult[i] = hex2byte(c);
 		}
 
@@ -75,48 +76,6 @@ static vector<vector<uint8_t>> FileReadAllBytes(char const* filename)
 static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 {
 	KeySchedule keySchedule(key);
-
-	//key[0] =  0x54;
-	//key[1] =  0x68;
-	//key[2] =  0x61;
-	//key[3] =  0x74;
-	//key[4] =  0x73;
-	//key[5] =  0x20;
-	//key[6] =  0x6D;
-	//key[7] =  0x79;
-	//key[8] =  0x20;
-	//key[9] =  0x4B;
-	//key[10] = 0x75;
-	//key[11] = 0x6E;
-	//key[12] = 0x67;
-	//key[13] = 0x20;
-	//key[14] = 0x46;
-	//key[15] = 0x75;
-	//
-	//
-	//data[0] =  0x54;
-	//data[1] =  0x77;
-	//data[2] =  0x6F;
-	//data[3] =  0x20;
-	//data[4] =  0x4F;
-	//data[5] =  0x6E;
-	//data[6] =  0x65;
-	//data[7] =  0x20;
-	//data[8] =  0x4E;
-	//data[9] =  0x69;
-	//data[10] = 0x6E;
-	//data[11] = 0x65;
-	//data[12] = 0x20;
-	//data[13] = 0x54;
-	//data[14] = 0x77;
-	//data[15] = 0x6F;
-
-
-
-
-
-
-	
 
 	auto firstKey = keySchedule.GetNextKey();
 	auto tmp = vector<uint8_t>(16);
@@ -190,41 +149,7 @@ static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 	return tmp;
 }
 
-static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> data) {
-	key[0] =  0x54;
-	key[1] =  0x68;
-	key[2] =  0x61;
-	key[3] =  0x74;
-	key[4] =  0x73;
-	key[5] =  0x20;
-	key[6] =  0x6D;
-	key[7] =  0x79;
-	key[8] =  0x20;
-	key[9] =  0x4B;
-	key[10] = 0x75;
-	key[11] = 0x6E;
-	key[12] = 0x67;
-	key[13] = 0x20;
-	key[14] = 0x46;
-	key[15] = 0x75;
-	
-	
-	data[0] =  0x29;
-	data[1] =  0xC3;
-	data[2] =  0x50;
-	data[3] =  0x5F;
-	data[4] =  0x57;
-	data[5] =  0x14;
-	data[6] =  0x20;
-	data[7] =  0xF6;
-	data[8] =  0x40;
-	data[9] =  0x22;
-	data[10] = 0x99;
-	data[11] = 0xB3;
-	data[12] = 0x1A;
-	data[13] = 0x02;
-	data[14] = 0xD7;
-	data[15] = 0x3A;
+static vector<uint8_t> Decrypt(vector<uint8_t> key, vector<uint8_t> data) {
 
 	// generate keys
 	KeySchedule keySchedule(key);
@@ -313,30 +238,33 @@ static vector<uint8_t> decrypt(vector<uint8_t> key, vector<uint8_t> data) {
 
 
 
+
+
+
+
 int _tmain(int argc, _TCHAR* argv[])
 {
-	assert(hex2byte("") == 0);
-	assert(hex2byte("00") == 0);
-	assert(hex2byte("A") == 10);
-	assert(hex2byte("0A") == 10);
-	assert(hex2byte("FF") == 255);
-	assert(hex2byte("EEFF") == 255);
-	assert(hex2byte("GG") == 00);
-	assert(hex2byte("a") == 10);
-	assert(hex2byte("0a") == 10);
-	assert(hex2byte("f3") == 243);
-	assert(hex2byte("ff") == 255);
-	assert(hex2byte("eeff") == 255);
-	assert(hex2byte("gg") == 00);
+	auto keys = FileReadAllBytes("key.txt");
+	auto messages = FileReadAllBytes("messages.txt");
 
-	auto key = FileReadAllBytes("..\\key.txt");
-	auto data = FileReadAllBytes("..\\text.txt");
+	auto key = keys[0];
 
-	for (auto it = data.begin(); it != data.end(); it++)
+	ofstream myfile;
+	myfile.open("output.txt");
+
+	for (auto it = messages.begin(); it != messages.end(); it++)
 	{
-		auto res = Encrypt(key[0], *it);
-		auto res2 = decrypt(key[0], res);
+		auto res = Encrypt(key, *it);
+		//auto res2 = Decrypt(key, res);
+
+		for (auto i = 0; i < 16; i++)
+		{
+			myfile << hex << setfill('0') << setw(2) << (int)res[i] << "";
+		}
+		myfile << endl;
 	}
+
+	myfile.close();
 	
 	return 0;
 }
