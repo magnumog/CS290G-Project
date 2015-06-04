@@ -45,9 +45,9 @@ std::vector<uint8_t> KeySchedule::GetNextKey()
 	return retKey;
 }
 
-std::vector<std::vector<uint8_t>> KeySchedule::CreateKeys(std::vector<uint8_t> key, int num)
+std::vector<std::vector<uint8_t> > KeySchedule::CreateKeys(std::vector<uint8_t> key, int num)
 {
-	auto result = std::vector<std::vector<uint8_t>>(num);
+	auto result = std::vector<std::vector<uint8_t> >(num);
 	result[0] = key;
 
 	for (auto i = 1; i < num; i++)

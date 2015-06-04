@@ -46,11 +46,11 @@ static uint8_t hex2byte(const char* hex)
 	return byte % 0x100;
 }
 
-static vector<vector<uint8_t>> FileReadAllBytes(char const* filename)
+static vector<vector<uint8_t> > FileReadAllBytes(char const* filename)
 {
 	ifstream ifs(filename, ios::binary);
 
-	vector<vector<uint8_t>> result;
+	vector<vector<uint8_t> > result;
 
 	std::string line;
 	while (std::getline(ifs, line))
