@@ -62,7 +62,7 @@ static vector<vector<uint8_t> > FileReadAllBytes(char const* filename)
 		for (auto i = 0; i < 16; i++)
 		{
 			char c[3];
-			strncpy_s(c, &line[i*2], 2);
+			strncpy(c, &line[i*2], 2);
 			innerResult[i] = hex2byte(c);
 		}
 
