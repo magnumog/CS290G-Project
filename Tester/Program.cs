@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -17,8 +18,7 @@ namespace Tester
         public static void Main(string[] args)
         {
             // create messages
-            var createdMessages = Enumerable.Range(0, 1000000).Select(_ => GenerateHex32());
-            //File.WriteAllText("messages.txt", string.Join("\n", createdMessages));
+            // CreateMessages("messages.txt");
 
             // read files as bytes
             var key = ReadFile(@"..\..\..\key.txt").First();
@@ -35,7 +35,18 @@ namespace Tester
             var encryptor = aes.CreateEncryptor();
 
             // encrypt
+            var sw = new Stopwatch();
+            sw.Start();
             File.WriteAllText("encrypted.txt", string.Join("\n", messages.Select(m => Encrypt(encryptor, m))));
+            sw.Stop();
+            Console.Write(sw.Elapsed);
+            Console.ReadKey(true);
+        }
+
+        private static void CreateMessages(string filename)
+        {
+            var createdMessages = Enumerable.Range(0, 1000000).Select(_ => GenerateHex32());
+            File.WriteAllText(filename, string.Join("\n", createdMessages));
         }
 
         private static IEnumerable<byte[]> ReadFile(string filename)

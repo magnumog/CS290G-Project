@@ -1,6 +1,4 @@
 #include "AES.h"
-#include "KeySchedule.h"
-#include "Rijndael.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -13,32 +11,49 @@
 #include <iomanip>
 using namespace std;
 
-// https://github.com/kokke/tiny-AES128-C/blob/master/aes.c
 
-// http://www.codeproject.com/Articles/1380/A-C-Implementation-of-the-Rijndael-Encryption-Decr
-// http://en.wikipedia.org/wiki/Rijndael_key_schedule
-// http://en.wikipedia.org/wiki/Rijndael_S-box
-// http://en.wikipedia.org/wiki/Finite_field_arithmetic#Rijndael.27s_finite_field
-
-#define SR(i, j) result2[i] = result[j];
-
-#define ShiftRowInverse(i,j) temp[i] = temp2[j];
-
-#define MC(i, j0, j1, j2, j3) {						            \
-	mcTmp[i] = (uint8_t)(galois2[sboxTmp[j0]] ^ galois3[sboxTmp[j1]] ^ sboxTmp[j2] ^ sboxTmp[j3]);	    \
-	mcTmp[i+1] = (uint8_t)(sboxTmp[j0] ^ galois2[sboxTmp[j1]] ^ galois3[sboxTmp[j2]] ^ sboxTmp[j3]);	\
-	mcTmp[i+2] = (uint8_t)(sboxTmp[j0] ^ sboxTmp[j1] ^ galois2[sboxTmp[j2]] ^ galois3[sboxTmp[j3]]);	\
-	mcTmp[i+3] = (uint8_t)(galois3[sboxTmp[j0]] ^ sboxTmp[j1] ^ sboxTmp[j2] ^ galois2[sboxTmp[j3]]);	\
+/* Key schedule generation
+ */
+#define KeyRotate(arr, offset) {					\
+	arr[offset+4] = arr[offset+4] ^ arr[offset];	\
+	arr[offset+5] = arr[offset+5] ^ arr[offset+1];	\
+	arr[offset+6] = arr[offset+6] ^ arr[offset+2];	\
+	arr[offset+7] = arr[offset+7] ^ arr[offset+3];	\
 }
 
-#define MC_inv(i,j0,j1,j2,j3) {																										\
-	temp2[i] = (uint8_t)(galois14[temp[i]] ^ galois11[temp[i+1 ]] ^ galois13[temp[i+2]] ^ galois9[temp [i+3]]);		\
-	temp2[i+1] = (uint8_t)(galois9[temp[i]] ^ galois14[temp[i+1]] ^ galois11[temp[i+2]] ^ galois13[temp[i+3]]);	\
-	temp2[i+2] = (uint8_t)(galois13[temp[i]] ^ galois9[temp[i+1]] ^ galois14[temp[i+2]] ^ galois11[temp[i+3]]);	\
-	temp2[i+3] = (uint8_t)(galois11[temp[i]] ^ galois13[temp[i+1]] ^ galois9[temp[i+2]] ^ galois14[temp[i+3]]);	\
+std::vector<std::vector<uint8_t> > CreateKeys(std::vector<uint8_t> key, int num)
+{
+	auto keyArray = std::vector<std::vector<uint8_t> >(num);
+	keyArray[0] = key;
+
+	for (auto i = 1; i < num; i++)
+	{
+		auto roundKey = std::vector<uint8_t>(keyArray[i - 1]);
+		uint8_t* ptr = roundKey.data();
+
+		// first 4 bytes with g applied
+		ptr[0] = ptr[0] ^ (SBOX[ptr[13]] ^ Rcon[i]);
+		ptr[1] = ptr[1] ^ SBOX[ptr[14]];
+		ptr[2] = ptr[2] ^ SBOX[ptr[15]];
+		ptr[3] = ptr[3] ^ SBOX[ptr[12]];
+
+		// last 12 bytes
+		KeyRotate(ptr, 0);
+		KeyRotate(ptr, 4);
+		KeyRotate(ptr, 8);
+
+		keyArray[i] = roundKey;
+	}
+
+	// Return current key
+	return keyArray;
 }
 
-static uint8_t hex2byte(const char* hex)
+
+
+/* File reading
+ */
+static uint8_t HexToByte(const char* hex)
 {
 	unsigned short byte = 0;
 	std::istringstream iss(hex);
@@ -50,215 +65,246 @@ static vector<vector<uint8_t> > FileReadAllBytes(char const* filename)
 {
 	ifstream ifs(filename, ios::binary);
 
-	vector<vector<uint8_t> > result;
+	vector<vector<uint8_t> > retArray;
 
 	std::string line;
 	while (std::getline(ifs, line))
 	{
 		if (line.length() != 32) continue;
 
-		vector<uint8_t> innerResult(16);
+		vector<uint8_t> lineBytes(16);
 
 		for (auto i = 0; i < 16; i++)
 		{
 			char c[3];
-			strncpy(c, &line[i*2], 2);
-			innerResult[i] = hex2byte(c);
+			strncpy(c, &line[i * 2], 2);
+			lineBytes[i] = HexToByte(c);
 		}
 
-		result.push_back(innerResult);
+		retArray.push_back(lineBytes);
 	}
 
-	return result;
+	return retArray;
+}
+
+
+
+/* Encryption
+ */
+#define ShiftRows(arrIn, arrOut, i, j) arrOut[i] = arrIn[j];
+
+#define MixColumns(arrIn, arrOut, i, j0, j1, j2, j3) {						            \
+	arrOut[i] = (uint8_t)(GF2[arrIn[j0]] ^ GF3[arrIn[j1]] ^ arrIn[j2] ^ arrIn[j3]);	    \
+	arrOut[i+1] = (uint8_t)(arrIn[j0] ^ GF2[arrIn[j1]] ^ GF3[arrIn[j2]] ^ arrIn[j3]);	\
+	arrOut[i+2] = (uint8_t)(arrIn[j0] ^ arrIn[j1] ^ GF2[arrIn[j2]] ^ GF3[arrIn[j3]]);	\
+	arrOut[i+3] = (uint8_t)(GF3[arrIn[j0]] ^ arrIn[j1] ^ arrIn[j2] ^ GF2[arrIn[j3]]);	\
 }
 
 static vector<uint8_t> Encrypt(vector<uint8_t> key, vector<uint8_t> data)
 {
-	KeySchedule keySchedule(key);
+	// create 11 keys for 128bit key profile
+	auto keys = CreateKeys(key, 11);
+	
+	// two temporary arrays of 128bit / 16 bytes needed
+	auto tmp1 = vector<uint8_t>(16);
+	auto tmp2 = vector<uint8_t>(16);
 
-	auto firstKey = keySchedule.GetNextKey();
-	auto tmp = vector<uint8_t>(16);
-
+	// initialize with AddKey
+	auto firstKey = keys[0];
 	for (auto i = 0; i < 16; i++)
 	{
-		tmp[i] = firstKey[i] ^ data[i];
+		tmp1[i] = firstKey[i] ^ data[i];
 	}
 
 	// 1 to n-1 rounds
 	for (auto i = 0; i < 9; i++)
 	{
-		// sbox
-		auto sboxTmp = vector<uint8_t>(16);
+		// ByteSub
 		for (auto i = 0; i < 16; i++)
 		{
-			sboxTmp[i] = sbox[tmp[i]];
+			tmp2[i] = SBOX[tmp1[i]];
 		}
 
-		// shift rows / mix column
-		auto mcTmp = vector<uint8_t>(16);
-		MC(0, 0, 5, 10, 15)
-		MC(4, 4, 9, 14, 3)
-		MC(8, 8, 13, 2, 7)
-		MC(12, 12, 1, 6, 11)
+		// ShiftRows / MixColumns
+		MixColumns(tmp2, tmp1, 0, 0, 5, 10, 15)
+		MixColumns(tmp2, tmp1, 4, 4, 9, 14, 3)
+		MixColumns(tmp2, tmp1, 8, 8, 13, 2, 7)
+		MixColumns(tmp2, tmp1, 12, 12, 1, 6, 11)
 
-		// add key
-		auto newKey = keySchedule.GetNextKey();
+		// AddKey
+		auto roundKey = keys[i+1];
 		for (auto i = 0; i < 16; i++)
 		{
-			tmp[i] = newKey[i] ^ mcTmp[i];
+			tmp1[i] = roundKey[i] ^ tmp1[i];
 		}
 	}
+
+	// last round onwards
 	
-
-	auto result = vector<uint8_t>(16);
-	auto result2 = vector<uint8_t>(16);
-
-	// sbox
+	// ByteSub
 	for (auto i = 0; i < 16; i++)
 	{
-		result[i] = sbox[tmp[i]];
+		tmp2[i] = SBOX[tmp1[i]];
 	}
 
-	// shift rows
-	SR(0,0)
-	SR(1,5)
-	SR(2,10)
-	SR(3,15)
-	SR(4,4)
-	SR(5,9)
-	SR(6,14)
-	SR(7,3)
-	SR(8,8)
-	SR(9,13)
-	SR(10,2)
-	SR(11,7)
-	SR(12,12)
-	SR(13,1)
-	SR(14,6)
-	SR(15,11)
+	// ShiftRows
+	ShiftRows(tmp2, tmp1, 0,0)
+	ShiftRows(tmp2, tmp1, 1,5)
+	ShiftRows(tmp2, tmp1, 2,10)
+	ShiftRows(tmp2, tmp1, 3,15)
+	ShiftRows(tmp2, tmp1, 4,4)
+	ShiftRows(tmp2, tmp1, 5,9)
+	ShiftRows(tmp2, tmp1, 6,14)
+	ShiftRows(tmp2, tmp1, 7,3)
+	ShiftRows(tmp2, tmp1, 8,8)
+	ShiftRows(tmp2, tmp1, 9,13)
+	ShiftRows(tmp2, tmp1, 10,2)
+	ShiftRows(tmp2, tmp1, 11,7)
+	ShiftRows(tmp2, tmp1, 12,12)
+	ShiftRows(tmp2, tmp1, 13,1)
+	ShiftRows(tmp2, tmp1, 14,6)
+	ShiftRows(tmp2, tmp1, 15,11)
 
-	// add key
-	auto newKey = keySchedule.GetNextKey();
+	// AddKey
+	auto lastKey = keys[10];
 	for (auto i = 0; i < 16; i++)
 	{
-		tmp[i] = newKey[i] ^ result2[i];
+		tmp2[i] = lastKey[i] ^ tmp1[i];
 	}
 	
 	
-	return tmp;
+	return tmp2;
+}
+
+
+
+/* Decryption
+ */
+#define ShiftRowsInverse(arrIn, arrOut, i,j) arrOut[i] = arrIn[j];
+
+#define MixColumnsInverse(arrIn, arrOut, i,j0,j1,j2,j3) {																\
+	arrOut[i] = (uint8_t)(GF14[arrIn[i]] ^ GF11[arrIn[i+1 ]] ^ GF13[arrIn[i+2]] ^ GF9[arrIn [i+3]]);	\
+	arrOut[i+1] = (uint8_t)(GF9[arrIn[i]] ^ GF14[arrIn[i+1]] ^ GF11[arrIn[i+2]] ^ GF13[arrIn[i+3]]);	\
+	arrOut[i+2] = (uint8_t)(GF13[arrIn[i]] ^ GF9[arrIn[i+1]] ^ GF14[arrIn[i+2]] ^ GF11[arrIn[i+3]]);	\
+	arrOut[i+3] = (uint8_t)(GF11[arrIn[i]] ^ GF13[arrIn[i+1]] ^ GF9[arrIn[i+2]] ^ GF14[arrIn[i+3]]);	\
 }
 
 static vector<uint8_t> Decrypt(vector<uint8_t> key, vector<uint8_t> data) {
 
-	// generate keys
-	KeySchedule keySchedule(key);
-	auto keys = keySchedule.CreateKeys(key, 11);
+	// create 11 keys for 128bit key profile - use them in reverse order
+	auto keys = CreateKeys(key, 11);
 	reverse(keys.begin(), keys.end());
 	
-	
-	auto temp = vector<uint8_t>(16);
-	auto temp2 = vector<uint8_t>(16);
+	// two temporary arrays of 128bit / 16 bytes needed
+	auto tmp1 = vector<uint8_t>(16);
+	auto tmp2 = vector<uint8_t>(16);
 
-	// key addition
-	auto roundKey = keys[0];
-	for(auto i=0;i<16;i++) {
-		temp2[i] = roundKey[i] ^ data[i];
+	// AddKey
+	auto firstKey = keys[0];
+	for(auto i=0;i<16;i++)
+	{
+		tmp2[i] = firstKey[i] ^ data[i];
 	}
 
-	// inverse shift rows
-	ShiftRowInverse(0, 0);
-	ShiftRowInverse(1, 13);
-	ShiftRowInverse(2, 10);
-	ShiftRowInverse(3, 7);
-	ShiftRowInverse(4, 4);
-	ShiftRowInverse(5, 1);
-	ShiftRowInverse(6, 14);
-	ShiftRowInverse(7, 11);
-	ShiftRowInverse(8, 8);
-	ShiftRowInverse(9, 5);
-	ShiftRowInverse(10, 2);
-	ShiftRowInverse(11, 15);
-	ShiftRowInverse(12, 12);
-	ShiftRowInverse(13, 9);
-	ShiftRowInverse(14, 6);
-	ShiftRowInverse(15, 3);
+	// inverse ShiftRows
+	ShiftRowsInverse(tmp2, tmp1, 0, 0);
+	ShiftRowsInverse(tmp2, tmp1, 1, 13);
+	ShiftRowsInverse(tmp2, tmp1, 2, 10);
+	ShiftRowsInverse(tmp2, tmp1, 3, 7);
+	ShiftRowsInverse(tmp2, tmp1, 4, 4);
+	ShiftRowsInverse(tmp2, tmp1, 5, 1);
+	ShiftRowsInverse(tmp2, tmp1, 6, 14);
+	ShiftRowsInverse(tmp2, tmp1, 7, 11);
+	ShiftRowsInverse(tmp2, tmp1, 8, 8);
+	ShiftRowsInverse(tmp2, tmp1, 9, 5);
+	ShiftRowsInverse(tmp2, tmp1, 10, 2);
+	ShiftRowsInverse(tmp2, tmp1, 11, 15);
+	ShiftRowsInverse(tmp2, tmp1, 12, 12);
+	ShiftRowsInverse(tmp2, tmp1, 13, 9);
+	ShiftRowsInverse(tmp2, tmp1, 14, 6);
+	ShiftRowsInverse(tmp2, tmp1, 15, 3);
 
-	// inverse byte substitution
-	for (auto i = 0; i < 16; i++) {
-		temp2[i] = rsbox[temp[i]];
+	// inverse ByteSub
+	for (auto i = 0; i < 16; i++)
+	{
+		tmp2[i] = INVSBOX[tmp1[i]];
 	}
 
-	//2 to n rounds
-	for(auto i=1;i<10;i++) {
-		// key addition
+	// 2 to n rounds
+	for(auto i=1;i<10;i++)
+	{
+		// AddKey
 		auto roundKey = keys[i];
 		for (auto j = 0; j<16; j++) {
-			temp[j] = temp2[j] ^ roundKey[j];
+			tmp1[j] = tmp2[j] ^ roundKey[j];
 		}
 
-		// inverse shift rows / InverseMixColumns
-		MC_inv(0,0,13,10,7);
-		MC_inv(4,4,1,14,11);
-		MC_inv(8,8,5,2,15);
-		MC_inv(12,12,9,6,3);
+		// inverse MixColumns
+		MixColumnsInverse(tmp1, tmp2, 0,0,13,10,7);
+		MixColumnsInverse(tmp1, tmp2, 4,4,1,14,11);
+		MixColumnsInverse(tmp1, tmp2, 8,8,5,2,15);
+		MixColumnsInverse(tmp1, tmp2, 12,12,9,6,3);
 
-		// inverse shift rows
-		ShiftRowInverse(0, 0);
-		ShiftRowInverse(1, 13);
-		ShiftRowInverse(2, 10);
-		ShiftRowInverse(3, 7);
-		ShiftRowInverse(4, 4);
-		ShiftRowInverse(5, 1);
-		ShiftRowInverse(6, 14);
-		ShiftRowInverse(7, 11);
-		ShiftRowInverse(8, 8);
-		ShiftRowInverse(9, 5);
-		ShiftRowInverse(10, 2);
-		ShiftRowInverse(11, 15);
-		ShiftRowInverse(12, 12);
-		ShiftRowInverse(13, 9);
-		ShiftRowInverse(14, 6);
-		ShiftRowInverse(15, 3);
+		// inverse ShiftRows
+		ShiftRowsInverse(tmp2, tmp1, 0, 0);
+		ShiftRowsInverse(tmp2, tmp1, 1, 13);
+		ShiftRowsInverse(tmp2, tmp1, 2, 10);
+		ShiftRowsInverse(tmp2, tmp1, 3, 7);
+		ShiftRowsInverse(tmp2, tmp1, 4, 4);
+		ShiftRowsInverse(tmp2, tmp1, 5, 1);
+		ShiftRowsInverse(tmp2, tmp1, 6, 14);
+		ShiftRowsInverse(tmp2, tmp1, 7, 11);
+		ShiftRowsInverse(tmp2, tmp1, 8, 8);
+		ShiftRowsInverse(tmp2, tmp1, 9, 5);
+		ShiftRowsInverse(tmp2, tmp1, 10, 2);
+		ShiftRowsInverse(tmp2, tmp1, 11, 15);
+		ShiftRowsInverse(tmp2, tmp1, 12, 12);
+		ShiftRowsInverse(tmp2, tmp1, 13, 9);
+		ShiftRowsInverse(tmp2, tmp1, 14, 6);
+		ShiftRowsInverse(tmp2, tmp1, 15, 3);
 		
-		// invert byte substitution
+		// inverse ByteSub
 		for (auto j = 0; j < 16; j++) {
-			temp2[j] = rsbox[temp[j]];
+			tmp2[j] = INVSBOX[tmp1[j]];
 		}
 	}
 
-	// key addition
-	roundKey = keys[10];
-	for(auto i=0;i<16;i++) {
-		temp[i] = temp2[i] ^ roundKey[i];
+	// AddKey
+	auto lastKey = keys[10];
+	for(auto i=0;i<16;i++)
+	{
+		tmp1[i] = tmp2[i] ^ lastKey[i];
 	}
 
-	return temp;
+
+	return tmp1;
 }
 
 
 
-
-
-
-
+/* Program entry point
+ */
 int main()
 {
+	// read key and messages to encrypt
 	auto keys = FileReadAllBytes("key.txt");
 	auto messages = FileReadAllBytes("messages.txt");
 
-	auto key = keys[0];
-
+	// key / file setup
+	auto key = keys[0]; // same key for all messages
 	ofstream myfile;
 	myfile.open("output.txt");
 
+	// loop all messages
 	for (auto it = messages.begin(); it != messages.end(); it++)
 	{
-		auto res = Encrypt(key, *it);
-		//auto res2 = Decrypt(key, res);
+		auto ciphertext = Encrypt(key, *it);
+		//auto cleartext = Decrypt(key, res);
 
+		// output ciphertext to file in HEX format
 		for (auto i = 0; i < 16; i++)
 		{
-			myfile << hex << setfill('0') << setw(2) << (int)res[i] << "";
+			myfile << hex << setfill('0') << setw(2) << (int)ciphertext[i] << "";
 		}
 		myfile << endl;
 	}
